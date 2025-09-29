@@ -104,7 +104,35 @@ def push_plus(title, content):
             print("pushplus推送失败")
     except:
         print("pushplus推送异常")
+        
+def dingding_bot(title, content):
+    """
+    使用 钉钉机器人 推送消息。
+    """
+    if not config.get("DD_BOT_SECRET") or not config.get("DD_BOT_TOKEN"):
+        print("钉钉机器人 服务的 DD_BOT_SECRET 或者 DD_BOT_TOKEN 未设置!!\n取消推送")
+        return
+    print("钉钉机器人 服务启动")
 
+    timestamp = str(round(time.time() * 1000))
+    secret_enc = push_config.get("DD_BOT_SECRET").encode("utf-8")
+    string_to_sign = "{}\n{}".format(timestamp, push_config.get("DD_BOT_SECRET"))
+    string_to_sign_enc = string_to_sign.encode("utf-8")
+    hmac_code = hmac.new(
+        secret_enc, string_to_sign_enc, digestmod=hashlib.sha256
+    ).digest()
+    sign = urllib.parse.quote_plus(base64.b64encode(hmac_code))
+    url = f'https://oapi.dingtalk.com/robot/send?access_token={push_config.get("DD_BOT_TOKEN")}&timestamp={timestamp}&sign={sign}'
+    headers = {"Content-Type": "application/json;charset=utf-8"}
+    data = {"msgtype": "text", "text": {"content": f"{title}\n\n{content}"}}
+    response = requests.post(
+        url=url, data=json.dumps(data), headers=headers, timeout=15
+    ).json()
+
+    if not response["errcode"]:
+        print("钉钉机器人 推送成功！")
+    else:
+        print("钉钉机器人 推送失败！")
 
 class MiMotionRunner:
     def __init__(self, _user, _passwd):
@@ -260,24 +288,36 @@ class MiMotionRunner:
 # 启动主函数
 def push_to_push_plus(exec_results, summary):
     # 判断是否需要pushplus推送
-    if PUSH_PLUS_TOKEN is not None and PUSH_PLUS_TOKEN != '' and PUSH_PLUS_TOKEN != 'NO':
-        if PUSH_PLUS_HOUR is not None and PUSH_PLUS_HOUR.isdigit():
-            if time_bj.hour != int(PUSH_PLUS_HOUR):
-                print(f"当前设置push_plus推送整点为：{PUSH_PLUS_HOUR}, 当前整点为：{time_bj.hour}，跳过推送")
-                return
+    # if PUSH_PLUS_TOKEN is not None and PUSH_PLUS_TOKEN != '' and PUSH_PLUS_TOKEN != 'NO':
+    #     if PUSH_PLUS_HOUR is not None and PUSH_PLUS_HOUR.isdigit():
+    #         if time_bj.hour != int(PUSH_PLUS_HOUR):
+    #             print(f"当前设置push_plus推送整点为：{PUSH_PLUS_HOUR}, 当前整点为：{time_bj.hour}，跳过推送")
+    #             return
+    #     html = f'<div>{summary}</div>'
+    #     if len(exec_results) >= PUSH_PLUS_MAX:
+    #         html += '<div>账号数量过多，详细情况请前往github actions中查看</div>'
+    #     else:
+    #         html += '<ul>'
+    #         for exec_result in exec_results:
+    #             success = exec_result['success']
+    #             if success is not None and success is True:
+    #                 html += f'<li><span>账号：{exec_result["user"]}</span>刷步数成功，接口返回：{exec_result["msg"]}</li>'
+    #             else:
+    #                 html += f'<li><span>账号：{exec_result["user"]}</span>刷步数失败，失败原因：{exec_result["msg"]}</li>'
+    #         html += '</ul>'
+    #     push_plus(f"{format_now()} 刷步数通知", html)
+    # 判断是否需要pushplus推送
+    if DD_BOT_TOKEN is not None and DD_BOT_TOKEN != '' and DD_BOT_TOKEN != 'NO':
         html = f'<div>{summary}</div>'
-        if len(exec_results) >= PUSH_PLUS_MAX:
-            html += '<div>账号数量过多，详细情况请前往github actions中查看</div>'
-        else:
-            html += '<ul>'
-            for exec_result in exec_results:
-                success = exec_result['success']
-                if success is not None and success is True:
-                    html += f'<li><span>账号：{exec_result["user"]}</span>刷步数成功，接口返回：{exec_result["msg"]}</li>'
-                else:
-                    html += f'<li><span>账号：{exec_result["user"]}</span>刷步数失败，失败原因：{exec_result["msg"]}</li>'
-            html += '</ul>'
-        push_plus(f"{format_now()} 刷步数通知", html)
+        html += '<ul>'
+        for exec_result in exec_results:
+            success = exec_result['success']
+            if success is not None and success is True:
+                html += f'<li><span>账号：{exec_result["user"]}</span>刷步数成功，接口返回：{exec_result["msg"]}</li>'
+            else:
+                html += f'<li><span>账号：{exec_result["user"]}</span>刷步数失败，失败原因：{exec_result["msg"]}</li>'
+        html += '</ul>'
+        dingding_bot(f"{format_now()} 刷步数通知", html)
 
 
 def run_single_account(total, idx, user_mi, passwd_mi):
